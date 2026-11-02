@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# lunch.science runtime
+data/
+*.log
+.pytest_cache/
+# Playwright browsers live in ~/.cache, but keep any local ones out
+/playwright-browsers/

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lunch.science · Görlitz Speiseplan</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo">lunch<span class="dot">.</span>science</span>
+      <span class="sub">Görlitz · Speiseplan-Observer</span>
+    </div>
+    <div class="meta" id="meta">
+      <span class="led" id="led"></span>
+      <span id="meta-text">lade …</span>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab" data-day="overview">Übersicht</button>
+    <button class="tab" data-day="today">Heute</button>
+    <button class="tab" data-day="0">Mo</button>
+    <button class="tab" data-day="1">Di</button>
+    <button class="tab" data-day="2">Mi</button>
+    <button class="tab" data-day="3">Do</button>
+    <button class="tab" data-day="4">Fr</button>
+  </nav>
+
+  <main id="content">
+    <div class="empty">Keine Daten. Ein Scrape läuft — gleich neu laden.</div>
+  </main>
+
+  <footer class="foot">
+    <span id="foot-left">lunch.science — interne Speiseplan-Aggregation</span>
+    <span id="foot-right"></span>
+  </footer>
+
+  <script id="menu-data" type="application/json">{{ data|tojson|safe }}</script>
+  <script id="scrape-state" type="application/json">{{ state|tojson|safe }}</script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

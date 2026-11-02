@@ -1,1 +1,117 @@
 # lunch.science
+
+Internes Speiseplan-Tool für Görlitz. Ruft regelmäßig die Speisepläne mehrerer
+Gastronomiebetriebe ab, normalisiert sie in ein gemeinsames Datenformat und
+zeigt sie als eine schlanke, leicht retro-/wissenschaftlich anmutende Website
+(Übersicht + Tage-Tabs, "Heute" per Default).
+
+## Quellen
+
+| Restaurant            | Quelle                                        | Abfrage                                        |
+|-----------------------|-----------------------------------------------|------------------------------------------------|
+| SUDOST                | `sudost.de/unser-speisezettel/` (im iFrame)   | HTML-Text, ganze Woche                         |
+| Kochwerk              | `kochwerk-goerlitz.de` (Bild)                 | Vision-LLM (OpenAI-kompatibel)                 |
+| Unsere Kantine · Polizei | `unsere-kantine.de` (PDF, KW <n>)           | `pypdf`-Textextraktion, aktuelle KW            |
+| Wichernhaus           | `wichernhaus-goerlitz.de` (HTML-Tabelle)      | HTML, nur der heutige Tag                      |
+| Bauchgefühl           | via Lieferando (`__NEXT_DATA__`)              | Headless-Chromium (Playwright), à la carte     |
+
+## Architektur
+
+```
+scrape.py        → ruft alle Scraper, schreibt data/menus.json (atomar)
+scrapers/        → ein Modul pro Restaurant + common.py (HTTP, Vision-LLM, Schema)
+config.py        → Pfade, Refresh-Intervall, Bind-Host/Port
+app.py           → Flask-App, rendert die UI, Hintergrund-Thread scrapet alle 4 h
+templates/ static/ → Frontend (Vanilla HTML/CSS/JS, kein Build)
+data/menus.json  → generiert (gitignored)
+```
+
+Gemeinsames Schema pro Restaurant:
+
+```jsonc
+{
+  "id": "sudost", "name": "SUDOST", "kind": "week",   // week | day | weekly-rotating
+  "period": "26.10. – 30.10.2026", "url": "...", "address": "...",
+  "allergens_legend": {"1": "Gluten", ...},
+  "days": { "2026-11-02": { "label": "Montag", "items": [
+        { "name": "...", "description": "...", "price": "12,30 €",
+          "price_takeaway": null, "tags": ["vegetarisch"], "allergens": [1,2] } ] } },
+  "status": "ok",  // ok | stale | error | unavailable
+  "last_scraped": "2026-11-02T11:45:31+01:00", "error": null
+}
+```
+
+`kind=weekly-rotating` (Bauchgefühl) hat keinen Tagesbegriff — die Karte wird auf
+jeden Tag gezeigt.
+
+## Setup (VM)
+
+```bash
+cd lunch.science
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m playwright install chromium   # einmalig, ~150 MB
+```
+
+Start:
+
+```bash
+.venv/bin/python app.py            # bindet 0.0.0.0:8080, scrapet bei Start + alle 4 h
+```
+
+Nur einmalig scrape (z. B. für Cron / Debug):
+
+```bash
+.venv/bin/python scrape.py                     # alle Quellen
+.venv/bin/python scrape.py sudost wichernhaus  # nur ausgewählte
+```
+
+### Umgebungsvariablen
+
+| Variable                 | Default      | Bedeutung                                   |
+|--------------------------|--------------|---------------------------------------------|
+| `LUNCH_HOST`             | `0.0.0.0`    | Bind-Host                                    |
+| `LUNCH_PORT`             | `8080`       | Port                                         |
+| `LUNCH_REFRESH_SECONDS`  | `14400`      | Refresh-Intervall (4 h)                      |
+| `LUNCH_NO_STARTUP_SCRAPE`| `0`          | `=1` → kein Scrape bei Start                 |
+| `KOCHWERK_API_KEY` / `OPENAI_API_KEY` | –  | API-Key für Vision-LLM (Kochwerk)     |
+| `OPENAI_BASE_URL`        | `https://api.openai.com/v1` | LLM-Endpoint                  |
+| `KOCHWERK_MODEL`         | `gpt-4o`     | LLM-Modell                                   |
+
+Ohne API-Key läuft Kochwerk im Status **offline** (unavailable) — alle anderen
+Quellen sind davon unabhängig.
+
+### systemd-Unit (Beispiel)
+
+```ini
+[Unit]
+Description=lunch.science
+After=network-online.target
+
+[Service]
+WorkingDirectory=/pfad/zu/lunch.science
+ExecStart=/pfad/zu/lunch.science/.venv/bin/python app.py
+Restart=on-failure
+Environment=LUNCH_PORT=8080
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## API
+
+- `GET /`            → Website
+- `GET /api/menus`   → komplettes `menus.json`
+- `GET /api/status`  → `{scraped_at, scraping, last_run, next_run, error, refresh_seconds}`
+- `POST /api/scrape` → löst einen manuellen Scrape aus
+
+## Troubleshooting
+
+- **Bauchgefühl leer/403:** Lieferando liegt hinter Cloudflare. Playwright
+  (Headless-Chromium) muss installiert sein (`playwright install chromium`).
+  Ggf. `--no-sandbox` ist nötig (setzt der Scraper bereits).
+- **Kochwerk offline:** Kein API-Key. `~/.kochwerk_env` mit
+  `KOCHWERK_API_KEY=...` anlegen oder Env-Var setzen.
+- **Polizei-Kantine leer:** Es existiert noch kein PDF für die aktuelle KW
+  (KW <n> <jahr>) auf der Seite.
+- **Daten stale:** `last_scraped` älter als ~3 h → gelbe LED im UI.
