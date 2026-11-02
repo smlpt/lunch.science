@@ -1,50 +1,50 @@
 # lunch.science
 
-Internes Speiseplan-Tool für Görlitz. Ruft regelmäßig die Speisepläne mehrerer
-Gastronomiebetriebe ab, normalisiert sie in ein gemeinsames Datenformat und
-zeigt sie als eine schlanke, leicht retro-/wissenschaftlich anmutende Website
-(Übersicht + Tage-Tabs, "Heute" per Default).
+Internal menu-board tool for Görlitz. Periodically fetches the menus of several
+local restaurants, normalizes them into a common data format, and displays them
+on a slim, slightly retro/scientific-looking website (overview + day tabs,
+"today" by default).
 
-## Quellen
+## Sources
 
-| Restaurant            | Quelle                                        | Abfrage                                        |
-|-----------------------|-----------------------------------------------|------------------------------------------------|
-| SUDOST                | `sudost.de/unser-speisezettel/` (im iFrame)   | HTML-Text, ganze Woche                         |
-| Kochwerk              | `kochwerk-goerlitz.de` (Bild)                 | Vision-LLM (OpenAI-kompatibel)                 |
-| Unsere Kantine · Polizei | `unsere-kantine.de` (PDF, KW <n>)           | `pypdf`-Textextraktion, aktuelle KW            |
-| Wichernhaus           | `wichernhaus-goerlitz.de` (HTML-Tabelle)      | HTML, nur der heutige Tag                      |
-| Bauchgefühl           | via Lieferando (`__NEXT_DATA__`)              | Headless-Chromium (Playwright), à la carte     |
-| SoulReis (Thang)      | `tally.so/r/81dLar` (Wochenplan)              | HTML-Text (Tally rendert serverseitig)         |
-| Jakobs Speiselokal    | `instagram.com/jakobsspeiselokal` (1. Post)   | Playwright + Vision-LLM (Menü ist ein Bild)    |
+| Restaurant             | Source                                          | Method                                             |
+|------------------------|-------------------------------------------------|----------------------------------------------------|
+| SUDOST                 | `sudost.de/unser-speisezettel/` (in an iFrame)  | HTML text, whole week                              |
+| Kochwerk               | `kochwerk-goerlitz.de` (image)                  | Vision LLM (OpenAI-compatible)                     |
+| Our Kantine · Police   | `unsere-kantine.de` (PDF, week <n>)             | `pypdf` text extraction, current week              |
+| Wichernhaus            | `wichernhaus-goerlitz.de` (HTML table)          | HTML, today only                                   |
+| Bauchgefühl            | via Lieferando (`__NEXT_DATA__`)                | Headless Chromium (Playwright), à la carte         |
+| SoulReis (Thang)       | `tally.so/r/81dLar` (weekly plan)               | HTML text (Tally renders server-side)              |
+| Jakobs Speiselokal     | `instagram.com/jakobsspeiselokal` (1st post)    | Playwright + Vision LLM (menu is an image)         |
 
-## Architektur
+## Architecture
 
 ```
-scrape.py        → ruft alle Scraper, schreibt data/menus.json (atomar)
-scrapers/        → ein Modul pro Restaurant + common.py (HTTP, Vision-LLM, Schema)
-config.py        → Pfade, Refresh-Intervall, Bind-Host/Port
-app.py           → Flask-App, rendert die UI, Hintergrund-Thread scrapet alle 4 h
-templates/ static/ → Frontend (Vanilla HTML/CSS/JS, kein Build)
-data/menus.json  → generiert (gitignored)
+scrape.py        → runs all scrapers, writes data/menus.json (atomically)
+scrapers/        → one module per restaurant + common.py (HTTP, vision LLM, schema)
+config.py        → paths, refresh interval, bind host/port
+app.py           → Flask app, renders the UI, background thread scrapes every 4 h
+templates/ static/ → frontend (vanilla HTML/CSS/JS, no build step)
+data/menus.json  → generated (gitignored)
 ```
 
-Gemeinsames Schema pro Restaurant:
+Common schema per restaurant:
 
 ```jsonc
 {
   "id": "sudost", "name": "SUDOST", "kind": "week",   // week | day | weekly-rotating
   "period": "26.10. – 30.10.2026", "url": "...", "address": "...",
   "allergens_legend": {"1": "Gluten", ...},
-  "days": { "2026-11-02": { "label": "Montag", "items": [
+  "days": { "2026-11-02": { "label": "Monday", "items": [
         { "name": "...", "description": "...", "price": "12,30 €",
-          "price_takeaway": null, "tags": ["vegetarisch"], "allergens": [1,2] } ] } },
+          "price_takeaway": null, "tags": ["vegetarian"], "allergens": [1,2] } ] } },
   "status": "ok",  // ok | stale | error | unavailable
   "last_scraped": "2026-11-02T11:45:31+01:00", "error": null
 }
 ```
 
-`kind=weekly-rotating` (Bauchgefühl) hat keinen Tagesbegriff — die Karte wird auf
-jeden Tag gezeigt.
+`kind=weekly-rotating` (Bauchgefühl) has no day concept — the menu is shown
+for every day.
 
 ## Setup (VM)
 
@@ -52,69 +52,69 @@ jeden Tag gezeigt.
 cd lunch.science
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m playwright install chromium   # einmalig, ~150 MB
+.venv/bin/python -m playwright install chromium   # one-time, ~150 MB
 ```
 
 Start:
 
 ```bash
-.venv/bin/python app.py            # bindet 0.0.0.0:8080, scrapet bei Start + alle 4 h
+.venv/bin/python app.py            # binds 0.0.0.0:8080, scrapes at start + every 4 h
 ```
 
-Nur einmalig scrape (z. B. für Cron / Debug):
+One-off scrape only (e.g. for cron / debugging):
 
 ```bash
-.venv/bin/python scrape.py                     # alle Quellen
-.venv/bin/python scrape.py sudost wichernhaus  # nur ausgewählte
+.venv/bin/python scrape.py                     # all sources
+.venv/bin/python scrape.py sudost wichernhaus  # only selected ones
 ```
 
-### LLM-Konfiguration (Vision-OCR für Kochwerk & Jakobs)
+### LLM configuration (vision OCR for Kochwerk & Jakobs)
 
-Zwei Quellen (Kochwerk, Jakobs Speiselokal) geben ihr Menü nur als Bild ab und
-brauchen daher ein Vision-LLM. Die Konfiguration wird **zentral in einer
-geschützten Datei** abgelegt, die nur du lesen kannst:
+Two sources (Kochwerk, Jakobs Speiselokal) only publish their menu as an image
+and therefore need a vision LLM. The configuration is stored **centrally in a
+protected file** that only you can read:
 
 ```bash
 cat > ~/.lunch_env <<'EOF'
-# lunch.science LLM config – nur dieses Konto darf lesen (chmod 600)
+# lunch.science LLM config – only this account may read it (chmod 600)
 LUNCH_API_KEY=sk-...
 # optional:
 LUNCH_BASE_URL=https://api.openai.com/v1
 LUNCH_MODEL=gpt-4o
 EOF
-chmod 600 ~/.lunch_env      # nur Eigentümer: lesen/schreiben
+chmod 600 ~/.lunch_env      # owner only: read/write
 ```
 
-Aufruf-Reihenfolge pro Einstellung (Datei gewinnt, falls Env-Var leer):
+Resolution order per setting (file wins if the env var is empty):
 
-1. Umgebungsvariable (`LUNCH_API_KEY` / `OPENAI_API_KEY`, …)
-2. `~/.lunch_env`  → dann legacy `~/.kochwerk_env`
+1. Environment variable (`LUNCH_API_KEY` / `OPENAI_API_KEY`, …)
+2. `~/.lunch_env`  → then legacy `~/.kochwerk_env`
 3. Default
 
-Alle akzeptierten Schlüssel in der Datei:
+All accepted keys in the file:
 
-| Schlüssel (Datei)              | Env-Var-Äquivalent               | Bedeutung          |
-|--------------------------------|----------------------------------|--------------------|
-| `LUNCH_API_KEY`                | `LUNCH_API_KEY` / `OPENAI_API_KEY` | API-Key        |
-| `LUNCH_BASE_URL`               | `OPENAI_BASE_URL`                | LLM-Endpoint       |
-| `LUNCH_MODEL`                  | `KOCHWERK_MODEL`                 | LLM-Modell         |
+| Key (file)                 | Env-var equivalent                 | Meaning          |
+|----------------------------|------------------------------------|------------------|
+| `LUNCH_API_KEY`            | `LUNCH_API_KEY` / `OPENAI_API_KEY` | API key          |
+| `LUNCH_BASE_URL`           | `OPENAI_BASE_URL`                  | LLM endpoint     |
+| `LUNCH_MODEL`              | `KOCHWERK_MODEL`                   | LLM model        |
 
-> `chmod 600` = nur der datei-erstellende Nutzer (der App-Nutzer auf der VM)
-> kann sie lesen. Andere Nutzer bekommen `Permission denied`.
+> `chmod 600` = only the user who created the file (the app user on the VM)
+> can read it. Other users get `Permission denied`.
 
-### Umgebungsvariablen (App)
+### Environment variables (app)
 
-| Variable                 | Default      | Bedeutung                                   |
+| Variable                 | Default      | Meaning                                     |
 |--------------------------|--------------|---------------------------------------------|
-| `LUNCH_HOST`             | `0.0.0.0`    | Bind-Host                                    |
-| `LUNCH_PORT`             | `8080`       | Port                                         |
-| `LUNCH_REFRESH_SECONDS`  | `14400`      | Refresh-Intervall (4 h)                      |
-| `LUNCH_NO_STARTUP_SCRAPE`| `0`          | `=1` → kein Scrape bei Start                 |
+| `LUNCH_HOST`             | `0.0.0.0`    | Bind host                                   |
+| `LUNCH_PORT`             | `8080`       | Port                                        |
+| `LUNCH_REFRESH_SECONDS`  | `14400`      | Refresh interval (4 h)                      |
+| `LUNCH_NO_STARTUP_SCRAPE`| `0`          | `=1` → no scrape at startup                 |
 
-Ohne API-Key laufen Kochwerk & Jakobs im Status **offline** (unavailable) — alle
-anderen Quellen sind davon unabhängig.
+Without an API key, Kochwerk & Jakobs run with status **offline** (unavailable)
+— all other sources are independent of this.
 
-### systemd-Unit (Beispiel)
+### systemd unit (example)
 
 ```ini
 [Unit]
@@ -122,8 +122,8 @@ Description=lunch.science
 After=network-online.target
 
 [Service]
-WorkingDirectory=/pfad/zu/lunch.science
-ExecStart=/pfad/zu/lunch.science/.venv/bin/python app.py
+WorkingDirectory=/path/to/lunch.science
+ExecStart=/path/to/lunch.science/.venv/bin/python app.py
 Restart=on-failure
 Environment=LUNCH_PORT=8080
 
@@ -133,24 +133,24 @@ WantedBy=multi-user.target
 
 ## API
 
-- `GET /`            → Website
-- `GET /api/menus`   → komplettes `menus.json`
+- `GET /`            → website
+- `GET /api/menus`   → the full `menus.json`
 - `GET /api/status`  → `{scraped_at, scraping, last_run, next_run, error, refresh_seconds}`
-- `POST /api/scrape` → löst einen manuellen Scrape aus
+- `POST /api/scrape` → triggers a manual scrape
 
 ## Troubleshooting
 
-- **Bauchgefühl leer/403:** Lieferando liegt hinter Cloudflare. Playwright
-  (Headless-Chromium) muss installiert sein (`playwright install chromium`).
-  Ggf. `--no-sandbox` ist nötig (setzt der Scraper bereits).
-- **Kochwerk / Jakobs offline:** Kein API-Key. `~/.lunch_env` anlegen
-  (siehe oben) mit `LUNCH_API_KEY=...` und `chmod 600`, oder Env-Var setzen.
-  `chmod 600` stellt sicher, dass nur der App-Nutzer die Datei liest.
-- **Polizei-Kantine leer:** Es existiert noch kein PDF für die aktuelle KW
-  (KW <n> <jahr>) auf der Seite.
-- **Jakobs Speiselokal offline:** Das Menü ist ein Instagram-Bild und braucht
-  einen Vision-LLM-Key (wie Kochwerk). Ohne Key → Status **offline**.
-- **SoulReis leer:** Der Tally-Wochenplan listet nur Tage, an denen Thang steht.
-  Geschlossene Tage (z. B. Mo/Fr) werden als „Geschlossen" gezeigt; Tage ohne
-  Eintrag in der aktuellen Woche erscheinen nicht.
-- **Daten stale:** `last_scraped` älter als ~3 h → gelbe LED im UI.
+- **Bauchgefühl empty/403:** Lieferando sits behind Cloudflare. Playwright
+  (headless Chromium) must be installed (`playwright install chromium`).
+  `--no-sandbox` may be required (the scraper already sets it).
+- **Kochwerk / Jakobs offline:** No API key. Create `~/.lunch_env`
+  (see above) with `LUNCH_API_KEY=...` and `chmod 600`, or set an env var.
+  `chmod 600` ensures only the app user can read the file.
+- **Police canteen empty:** No PDF for the current week
+  (week <n> <year>) exists on the page yet.
+- **Jakobs Speiselokal offline:** The menu is an Instagram image and needs
+  a vision LLM key (like Kochwerk). Without a key → status **offline**.
+- **SoulReis empty:** The Tally weekly plan only lists the days Thang is open.
+  Closed days (e.g. Mon/Fri) are shown as "Closed"; days with no entry in the
+  current week do not appear.
+- **Data stale:** `last_scraped` older than ~3 h → yellow LED in the UI.
