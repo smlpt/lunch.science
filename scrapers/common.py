@@ -212,7 +212,8 @@ def vision_available() -> bool:
     return bool(resolve_api_key())
 
 
-def ask_vision(image_b64: str, *, system: str, user_text: str = "Transcribe this menu.") -> dict:
+def ask_vision(image_b64: str, *, system: str, user_text: str = "Transcribe this menu.",
+               image_mime: str = "image/jpeg") -> dict:
     cfg = _llm_config()
     api_key = cfg["api_key"]
     if not api_key:
@@ -231,7 +232,7 @@ def ask_vision(image_b64: str, *, system: str, user_text: str = "Transcribe this
             {"role": "user", "content": [
                 {"type": "text", "text": user_text},
                 {"type": "image_url",
-                 "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+                 "image_url": {"url": f"data:{image_mime};base64,{image_b64}"}},
             ]},
         ],
     }
@@ -242,8 +243,16 @@ def ask_vision(image_b64: str, *, system: str, user_text: str = "Transcribe this
                       json=payload, timeout=180)
     r.raise_for_status()
     text = r.json()["choices"][0]["message"]["content"]
+    log.info("LLM raw response (%d chars):\n%s", len(text), text[:2000])
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
-    return json.loads(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        log.error("LLM JSON parse failed: %s", e)
+        raise
+    if isinstance(data, dict):
+        log.info("LLM parsed keys: %s", list(data.keys()))
+    return data
 
 
 def image_to_b64(data: bytes) -> str:

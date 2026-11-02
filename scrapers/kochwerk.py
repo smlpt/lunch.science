@@ -79,27 +79,54 @@ def scrape() -> dict:
     r["period"] = data.get("period")
 
     week_dates = week_range_dates(*date.today().isocalendar()[:2])
+    day_names = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"]
     days: dict = {}
     special_items: list[dict] = []
+
+    def place(item: dict, day_key: str) -> None:
+        key = (day_key or "").strip().upper()
+        idx = DAY_TO_INDEX.get(key) or DAY_TO_INDEX.get(key.lower())
+        if idx is not None:
+            d = week_dates[idx]
+            days.setdefault(date_key(d), []).append((day_names[idx], item))
+        elif key in SPECIAL:
+            item["tags"] = [key.lower()]
+            special_items.append(item)
+
+    # Shape A: {"days": {"MO": [items], ...}}  (the requested schema)
     for key, items in (data.get("days") or {}).items():
-        key = key.strip().upper()
         for it in items or []:
-            if not (it or {}).get("name"):
-                continue
-            item = _to_item(it)
-            if key in DAY_TO_INDEX:
-                idx = DAY_TO_INDEX[key]
-                d = week_dates[idx]
-                name = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"][idx]
-                days.setdefault(date_key(d), []).append((name, item))
-            elif key in SPECIAL:
-                item["tags"] = [key.lower()]
-                special_items.append(item)
+            if (it or {}).get("name"):
+                place(_to_item(it), key)
+
+    # Shape B: {"items": [{...,"day":"MO"}, ...]}  (original kochwerk.py schema)
+    if not days:
+        for it in (data.get("items") or []):
+            if (it or {}).get("name"):
+                place(_to_item(it), it.get("day") or "")
+
+    # Shape C: flat list at top level
+    if not days and isinstance(data, list):
+        for it in data:
+            if (it or {}).get("name"):
+                place(_to_item(it), it.get("day") or "")
+
+    # If the LLM used full weekday names instead of 2-letter tokens, retry.
+    if not days:
+        FULL = {n.upper(): i for i, n in enumerate(day_names)}
+        for src in (data.get("days") or {}, {it.get("day"): [it]
+                  for it in (data.get("items") or []) if it.get("day")}):
+            for key, items in src.items():
+                idx = FULL.get((key or "").strip().upper())
+                if idx is None:
+                    continue
+                for it in (items if isinstance(items, list) else [items]) or []:
+                    if (it or {}).get("name"):
+                        place(_to_item(it), key)
 
     day_objs = {}
     for dk, lst in days.items():
-        name = lst[0][0]
-        day_objs[dk] = make_day(name, [it for _, it in lst])
+        day_objs[dk] = make_day(lst[0][0], [it for _, it in lst])
     # Attach special sections (bowl/eintopf/suppe/dessert) to every weekday.
     for dk in day_objs:
         day_objs[dk]["items"].extend(special_items)
@@ -108,5 +135,6 @@ def scrape() -> dict:
     r["status"] = "ok" if day_objs else "error"
     r["last_scraped"] = now_iso()
     if not day_objs:
-        r["error"] = "vision LLM returned no weekday items"
+        r["error"] = ("vision LLM returned no usable weekday items "
+                      f"(period={data.get('period')!r})")
     return r
