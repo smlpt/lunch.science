@@ -14,6 +14,8 @@ zeigt sie als eine schlanke, leicht retro-/wissenschaftlich anmutende Website
 | Unsere Kantine · Polizei | `unsere-kantine.de` (PDF, KW <n>)           | `pypdf`-Textextraktion, aktuelle KW            |
 | Wichernhaus           | `wichernhaus-goerlitz.de` (HTML-Tabelle)      | HTML, nur der heutige Tag                      |
 | Bauchgefühl           | via Lieferando (`__NEXT_DATA__`)              | Headless-Chromium (Playwright), à la carte     |
+| SoulReis (Thang)      | `tally.so/r/81dLar` (Wochenplan)              | HTML-Text (Tally rendert serverseitig)         |
+| Jakobs Speiselokal    | `instagram.com/jakobsspeiselokal` (1. Post)   | Playwright + Vision-LLM (Menü ist ein Bild)    |
 
 ## Architektur
 
@@ -114,4 +116,9 @@ WantedBy=multi-user.target
   `KOCHWERK_API_KEY=...` anlegen oder Env-Var setzen.
 - **Polizei-Kantine leer:** Es existiert noch kein PDF für die aktuelle KW
   (KW <n> <jahr>) auf der Seite.
+- **Jakobs Speiselokal offline:** Das Menü ist ein Instagram-Bild und braucht
+  einen Vision-LLM-Key (wie Kochwerk). Ohne Key → Status **offline**.
+- **SoulReis leer:** Der Tally-Wochenplan listet nur Tage, an denen Thang steht.
+  Geschlossene Tage (z. B. Mo/Fr) werden als „Geschlossen" gezeigt; Tage ohne
+  Eintrag in der aktuellen Woche erscheinen nicht.
 - **Daten stale:** `last_scraped` älter als ~3 h → gelbe LED im UI.

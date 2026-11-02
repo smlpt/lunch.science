@@ -62,6 +62,12 @@
     return day ? day.items : null;
   }
 
+  // Full day object (items + is_open + note) for a restaurant on a day.
+  function dayFor(rest, dkey) {
+    if (rest.kind === "weekly-rotating") return rest.days && rest.days["always"];
+    return rest.days && rest.days[dkey];
+  }
+
   function dishHTML(it) {
     var h = '<div class="dish"><div class="row1"><span class="name">' + esc(it.name) + '</span>';
     var prices = [];
@@ -100,8 +106,13 @@
       h += '<div class="errmsg">' + esc(rest.error || "Scrape fehlgeschlagen") + '</div>';
     } else {
       if (rest.note) h += '<div class="note">' + esc(rest.note) + '</div>';
+      var day = dayFor(rest, dkey);
       if (!items) {
         h += '<div class="card-sub">kein Eintrag für diesen Tag</div>';
+      } else if (day && day.is_open === false) {
+        h += '<div class="closed">' + esc(day.note || "Geschlossen") + '</div>';
+      } else if (day && day.note) {
+        h += '<div class="daynote">' + esc(day.note) + '</div>';
       } else if (!items.length) {
         h += '<div class="card-sub">keine Gerichte</div>';
       } else {
@@ -146,6 +157,7 @@
     html += '<th>Gerichte</th></tr></thead><tbody>';
     RESTS.forEach(function (r) {
       var items = itemsForDay(r, dkey);
+      var day = dayFor(r, dkey);
       html += '<tr><td class="rest">' + esc(r.name) + '</td><td>';
       if (r.status === "unavailable" || staleStatus(r) === "unavail") {
         html += '<span class="none">offline — ' + esc(r.error || "keine Daten") + '</span>';
@@ -153,6 +165,8 @@
         html += '<span class="none">Fehler</span>';
       } else if (!items) {
         html += '<span class="none">— kein Eintrag —</span>';
+      } else if (day && day.is_open === false) {
+        html += '<span class="none">' + esc(day.note || "Geschlossen") + '</span>';
       } else if (!items.length) {
         html += '<span class="none">keine Gerichte</span>';
       } else {

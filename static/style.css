@@ -137,6 +137,8 @@ main { padding: 20px 22px 40px; max-width: 1180px; margin: 0 auto; }
 .note { font-size: 11px; color: var(--warn); border-left: 2px solid var(--warn);
         padding-left: 8px; margin: 8px 0; }
 .errmsg { font-size: 11px; color: var(--err); margin-top: 8px; }
+.closed { font-size: 13px; color: var(--ink-dim); font-style: italic; padding: 10px 0; }
+.daynote { font-size: 11px; color: var(--accent2); margin: 4px 0 8px; }
 
 /* dish list */
 .dish { padding: 8px 0; border-top: 1px dashed var(--line); }

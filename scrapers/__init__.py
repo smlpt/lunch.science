@@ -1,7 +1,8 @@
 """Scraper packages for lunch.science."""
 from __future__ import annotations
 
-from . import (bauchgefuhl, kochwerk, polizei_kantine, sudost, wichernhaus)
+from . import (bauchgefuhl, jakobs_speiselokal, kochwerk, polizei_kantine,
+               soulreis, sudost, wichernhaus)
 
 # Ordered registry: (module, stable_id). Order = display order on the site.
 SCRAPERS = [
@@ -10,6 +11,8 @@ SCRAPERS = [
     ("polizei_kantine", polizei_kantine),
     ("wichernhaus", wichernhaus),
     ("bauchgefuhl", bauchgefuhl),
+    ("soulreis", soulreis),
+    ("jakobs_speiselokal", jakobs_speiselokal),
 ]
 
 ALL = {mid: mod for mid, mod in SCRAPERS}
