@@ -2,7 +2,7 @@
 
 The menu is published only as an image (a CSS background), so we locate the
 image URL and transcribe it with an OpenAI-compatible vision LLM. Reuses the
-original key-resolution logic (env vars / ~/.kochwerk_env). Degrades to
+key-resolution logic (env vars / ~/.lunch_env). Degrades to
 status 'unavailable' when no API key is configured.
 """
 from __future__ import annotations
@@ -63,8 +63,9 @@ def scrape() -> dict:
     r = make_restaurant("kochwerk", NAME, "week", url=URL, address=ADDRESS)
     if not vision_available():
         r["status"] = "unavailable"
-        r["error"] = ("vision LLM not configured: set KOCHWERK_API_KEY / OPENAI_API_KEY "
-                      f"or create ~/.kochwerk_env (see scrapers/kochwerk.py)")
+        r["error"] = ("vision LLM not configured: create a protected "
+                      f"~/.lunch_env (chmod 600) with LUNCH_API_KEY=... or set "
+                      "the env var LUNCH_API_KEY / OPENAI_API_KEY")
         r["last_scraped"] = now_iso()
         return r
     session = new_session()

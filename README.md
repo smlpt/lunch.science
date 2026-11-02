@@ -68,7 +68,41 @@ Nur einmalig scrape (z. B. für Cron / Debug):
 .venv/bin/python scrape.py sudost wichernhaus  # nur ausgewählte
 ```
 
-### Umgebungsvariablen
+### LLM-Konfiguration (Vision-OCR für Kochwerk & Jakobs)
+
+Zwei Quellen (Kochwerk, Jakobs Speiselokal) geben ihr Menü nur als Bild ab und
+brauchen daher ein Vision-LLM. Die Konfiguration wird **zentral in einer
+geschützten Datei** abgelegt, die nur du lesen kannst:
+
+```bash
+cat > ~/.lunch_env <<'EOF'
+# lunch.science LLM config – nur dieses Konto darf lesen (chmod 600)
+LUNCH_API_KEY=sk-...
+# optional:
+LUNCH_BASE_URL=https://api.openai.com/v1
+LUNCH_MODEL=gpt-4o
+EOF
+chmod 600 ~/.lunch_env      # nur Eigentümer: lesen/schreiben
+```
+
+Aufruf-Reihenfolge pro Einstellung (Datei gewinnt, falls Env-Var leer):
+
+1. Umgebungsvariable (`LUNCH_API_KEY` / `OPENAI_API_KEY`, …)
+2. `~/.lunch_env`  → dann legacy `~/.kochwerk_env`
+3. Default
+
+Alle akzeptierten Schlüssel in der Datei:
+
+| Schlüssel (Datei)              | Env-Var-Äquivalent               | Bedeutung          |
+|--------------------------------|----------------------------------|--------------------|
+| `LUNCH_API_KEY`                | `LUNCH_API_KEY` / `OPENAI_API_KEY` | API-Key        |
+| `LUNCH_BASE_URL`               | `OPENAI_BASE_URL`                | LLM-Endpoint       |
+| `LUNCH_MODEL`                  | `KOCHWERK_MODEL`                 | LLM-Modell         |
+
+> `chmod 600` = nur der datei-erstellende Nutzer (der App-Nutzer auf der VM)
+> kann sie lesen. Andere Nutzer bekommen `Permission denied`.
+
+### Umgebungsvariablen (App)
 
 | Variable                 | Default      | Bedeutung                                   |
 |--------------------------|--------------|---------------------------------------------|
@@ -76,12 +110,9 @@ Nur einmalig scrape (z. B. für Cron / Debug):
 | `LUNCH_PORT`             | `8080`       | Port                                         |
 | `LUNCH_REFRESH_SECONDS`  | `14400`      | Refresh-Intervall (4 h)                      |
 | `LUNCH_NO_STARTUP_SCRAPE`| `0`          | `=1` → kein Scrape bei Start                 |
-| `KOCHWERK_API_KEY` / `OPENAI_API_KEY` | –  | API-Key für Vision-LLM (Kochwerk)     |
-| `OPENAI_BASE_URL`        | `https://api.openai.com/v1` | LLM-Endpoint                  |
-| `KOCHWERK_MODEL`         | `gpt-4o`     | LLM-Modell                                   |
 
-Ohne API-Key läuft Kochwerk im Status **offline** (unavailable) — alle anderen
-Quellen sind davon unabhängig.
+Ohne API-Key laufen Kochwerk & Jakobs im Status **offline** (unavailable) — alle
+anderen Quellen sind davon unabhängig.
 
 ### systemd-Unit (Beispiel)
 
@@ -112,8 +143,9 @@ WantedBy=multi-user.target
 - **Bauchgefühl leer/403:** Lieferando liegt hinter Cloudflare. Playwright
   (Headless-Chromium) muss installiert sein (`playwright install chromium`).
   Ggf. `--no-sandbox` ist nötig (setzt der Scraper bereits).
-- **Kochwerk offline:** Kein API-Key. `~/.kochwerk_env` mit
-  `KOCHWERK_API_KEY=...` anlegen oder Env-Var setzen.
+- **Kochwerk / Jakobs offline:** Kein API-Key. `~/.lunch_env` anlegen
+  (siehe oben) mit `LUNCH_API_KEY=...` und `chmod 600`, oder Env-Var setzen.
+  `chmod 600` stellt sicher, dass nur der App-Nutzer die Datei liest.
 - **Polizei-Kantine leer:** Es existiert noch kein PDF für die aktuelle KW
   (KW <n> <jahr>) auf der Seite.
 - **Jakobs Speiselokal offline:** Das Menü ist ein Instagram-Bild und braucht

@@ -109,7 +109,8 @@ def scrape() -> dict:
     if not vision_available():
         r["status"] = "unavailable"
         r["error"] = ("vision LLM not configured (Instagram menu needs OCR): "
-                      "set KOCHWERK_API_KEY / OPENAI_API_KEY or ~/.kochwerk_env")
+                      "create a protected ~/.lunch_env (chmod 600) with "
+                      "LUNCH_API_KEY=... or set the env var LUNCH_API_KEY / OPENAI_API_KEY")
         r["last_scraped"] = now_iso()
         return r
 

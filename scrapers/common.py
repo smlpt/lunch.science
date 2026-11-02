@@ -22,7 +22,15 @@ DEFAULT_HEADERS = {
     "Accept-Language": "de-DE,de;q=0.9,en;q=0.8",
 }
 
-ENV_FILE = os.path.join(os.path.expanduser("~"), ".kochwerk_env")
+# LLM config files, checked in order. The first file that exists (and is
+# readable) is used. The primary is the project's own protected file; the
+# legacy kochwerk file is kept as a fallback for backwards compatibility.
+ENV_FILES = (
+    os.path.join(os.path.expanduser("~"), ".lunch_env"),
+    os.path.join(os.path.expanduser("~"), ".kochwerk_env"),
+)
+# Canonical name for the primary file, used in error messages / docs.
+ENV_FILE = ENV_FILES[0]
 
 # German day-of-week tokens used across sources, mapped to weekday index (Mon=0).
 DAY_TOKENS = {
@@ -130,33 +138,74 @@ def current_week() -> tuple[int, int]:
 # Vision LLM (reused logic from the original kochwerk.py)
 # ---------------------------------------------------------------------------
 
-def read_key_from_env_file() -> str:
-    if not os.path.isfile(ENV_FILE):
-        return ""
+def _read_env_file(path: str) -> dict:
+    """Parse a KEY=VALUE env file into a dict.
+
+    Accepts `export FOO=bar`, `FOO="bar"`, `FOO='bar'`, `FOO=bar` and ignores
+    blank lines and `#` comments. Returns {} if the file is missing/unreadable.
+    """
+    out: dict[str, str] = {}
+    if not os.path.isfile(path):
+        return out
     try:
-        with open(ENV_FILE, "r", encoding="utf-8-sig") as f:
+        with open(path, "r", encoding="utf-8-sig") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
                 if line.startswith("export "):
-                    line = line[len("export "):]
-                if "=" in line:
-                    k, _, v = line.partition("=")
-                    if k.strip() in ("KOCHWERK_API_KEY", "OPENAI_API_KEY"):
-                        v = v.strip().strip('"').strip("'")
-                        if v:
-                            return v
+                    line = line[len("export "):].lstrip()
+                if "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                if k:
+                    out[k] = v
     except Exception as e:  # noqa: BLE001
-        log.debug("failed reading env file: %s", e)
-    return ""
+        log.warning("could not read env file %s: %s", path, e)
+    return out
+
+
+def _llm_config() -> dict:
+    """Resolve the LLM config (key, base_url, model).
+
+    Resolution order per setting:
+      1. process environment variable
+      2. the first existing env file (~/.lunch_env, then ~/.kochwerk_env)
+      3. default
+
+    Env-file variables accepted:
+      LUNCH_API_KEY | KOCHWERK_API_KEY | OPENAI_API_KEY   -> api key
+      LUNCH_BASE_URL | OPENAI_BASE_URL                    -> endpoint
+      LUNCH_MODEL | KOCHWERK_MODEL                        -> model
+    """
+    file_vars: dict[str, str] = {}
+    for path in ENV_FILES:
+        file_vars = _read_env_file(path)
+        if file_vars:
+            log.info("LLM config file: %s", path)
+            break
+
+    def pick(*names, default: str = "") -> str:
+        for n in names:
+            if os.environ.get(n):
+                return os.environ[n]
+        for n in names:
+            if file_vars.get(n):
+                return file_vars[n]
+        return default
+
+    return {
+        "api_key": pick("LUNCH_API_KEY", "KOCHWERK_API_KEY", "OPENAI_API_KEY"),
+        "base_url": pick("LUNCH_BASE_URL", "OPENAI_BASE_URL",
+                         default="https://api.openai.com/v1"),
+        "model": pick("LUNCH_MODEL", "KOCHWERK_MODEL", default="gpt-4o"),
+    }
 
 
 def resolve_api_key() -> str:
-    for var in ("KOCHWERK_API_KEY", "OPENAI_API_KEY"):
-        if os.environ.get(var):
-            return os.environ[var]
-    return read_key_from_env_file()
+    return _llm_config()["api_key"]
 
 
 def vision_available() -> bool:
@@ -164,11 +213,15 @@ def vision_available() -> bool:
 
 
 def ask_vision(image_b64: str, *, system: str, user_text: str = "Transcribe this menu.") -> dict:
-    api_key = resolve_api_key()
+    cfg = _llm_config()
+    api_key = cfg["api_key"]
     if not api_key:
-        raise RuntimeError("no vision LLM API key configured (KOCHWERK_API_KEY / OPENAI_API_KEY / ~/.kochwerk_env)")
-    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    model = os.environ.get("KOCHWERK_MODEL", "gpt-4o")
+        raise RuntimeError(
+            "no vision LLM API key configured. Create a protected config file "
+            f"{ENV_FILE} (chmod 600) containing LUNCH_API_KEY=your-key, or set "
+            "the env var LUNCH_API_KEY / OPENAI_API_KEY.")
+    base_url = cfg["base_url"].rstrip("/")
+    model = cfg["model"]
     payload = {
         "model": model,
         "max_tokens": 4000,
