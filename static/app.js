@@ -111,12 +111,15 @@
         h += '<div class="card-sub">kein Eintrag für diesen Tag</div>';
       } else if (day && day.is_open === false) {
         h += '<div class="closed">' + esc(day.note || "Geschlossen") + '</div>';
-      } else if (day && day.note) {
-        h += '<div class="daynote">' + esc(day.note) + '</div>';
-      } else if (!items.length) {
-        h += '<div class="card-sub">keine Gerichte</div>';
       } else {
-        h += '<div class="dishes">' + items.map(dishHTML).join("") + '</div>';
+        // A day can carry both a note (e.g. location & time for SoulReis) and
+        // its dishes - render the note on top of the menu, not instead of it.
+        if (day && day.note) h += '<div class="daynote">' + esc(day.note) + '</div>';
+        if (!items.length) {
+          h += '<div class="card-sub">keine Gerichte</div>';
+        } else {
+          h += '<div class="dishes">' + items.map(dishHTML).join("") + '</div>';
+        }
       }
       if (rest.allergens_legend && Object.keys(rest.allergens_legend).length) {
         var leg = Object.keys(rest.allergens_legend).sort(function (a, b) {
