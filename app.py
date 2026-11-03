@@ -82,6 +82,23 @@ def _fmt_price(p):
     return p
 
 
+@app.after_request
+def _no_cache(resp):
+    """Never let the browser cache the menu page or APIs.
+
+    The index HTML embeds the menu data server-side, so a cached copy would
+    show stale dishes (e.g. bowls that just went out of stock) until a hard
+    refresh. The JSON APIs are polled, but no-cache keeps them honest too.
+    Static assets (app.js/style.css) are revalidated via ETag by Werkzeug,
+    which is fine.
+    """
+    if resp.content_type and resp.content_type.startswith("text/html"):
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+    elif resp.content_type and resp.content_type.startswith("application/json"):
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
+
+
 @app.route("/")
 def index():
     data = _load_data()
