@@ -153,8 +153,7 @@
 
   function renderOverview(tab) {
     var dkey = tabDayKey(tab) || todayKey;
-    var label = DAY_LABELS[parseInt(tab, 10)] + ", " + fmt(dkey);
-    var html = '<div class="dayhead"><h2>' + esc(label) + '</h2>' +
+    var html = '<div class="dayhead"><h2>Overview</h2>' +
       '<span class="d">Overview · ' + fmt(dkey) + '</span></div>';
     html += '<div style="overflow-x:auto"><table class="ov"><thead><tr><th>Restaurant</th>';
     html += '<th>Dishes</th></tr></thead><tbody>';
