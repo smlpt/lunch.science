@@ -16,6 +16,7 @@ on a slim, slightly retro/scientific-looking website (overview + day tabs,
 | Bauchgefühl            | via Lieferando (`__NEXT_DATA__`)                | Headless Chromium (Playwright), à la carte         |
 | SoulReis (Thang)       | `tally.so/r/81dLar` (weekly plan)               | HTML text (Tally renders server-side)              |
 | Jakobs Speiselokal     | `instagram.com/jakobsspeiselokal` (1st post)    | Playwright + Vision LLM (menu is an image)         |
+| Onkel Emma             | `onkel-emma-gr.de/wochenkarte.html` (JSON)      | Plain HTTP fetch of `wochenkarte.json`, week       |
 
 ## Architecture
 
