@@ -72,6 +72,7 @@ def _fetch_page() -> tuple[dict, str]:
     which is not present in the JSON. Categories are expanded in the DOM first
     so every dish row (and its price element) is present.
     """
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -83,9 +84,31 @@ def _fetch_page() -> tuple[dict, str]:
                 user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                             "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"))
             page.goto(URL, wait_until="domcontentloaded", timeout=90000)
-            page.wait_for_timeout(4000)  # allow challenge to clear + hydration
-            # Expand collapsed categories so every dish row renders, then
-            # scroll to force any remaining lazy-loaded rows into the DOM.
+            # Wait (bounded) until the menu has actually hydrated AND the
+            # "Nicht verfügbar" price text is in the DOM. The availability
+            # filter depends on that text, so we must not snapshot the page
+            # before it exists - a fixed wait is timing- and environment-
+            # sensitive (it flaps between a dev box and a fresh headless VM).
+            # Polling on the real condition makes the scrape deterministic.
+            try:
+                page.wait_for_function(
+                    """() => {
+                        const html = document.body ? document.body.innerHTML : '';
+                        return html.indexOf('__NEXT_DATA__') >= 0
+                            && /Nicht\\s+verf[üu]gbar/i.test(html);
+                    }""",
+                    timeout=60000,
+                )
+            except PlaywrightTimeoutError:
+                # Timed out: either there are genuinely no unavailable items
+                # this week, or hydration stalled. Either way, proceed to
+                # snapshot - a missing __NEXT_DATA__ below will raise if the
+                # page never loaded at all.
+                pass
+            # Expand collapsed categories so every dish row (and its price
+            # element) renders, then scroll to force any remaining lazy-loaded
+            # rows into the DOM. Best-effort: if expansion fails we still have
+            # whatever rendered, which is enough for the available items.
             try:
                 page.evaluate(
                     "() => document.querySelectorAll('[data-qa]').forEach(el => {"
