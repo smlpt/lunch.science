@@ -114,22 +114,45 @@ All accepted keys in the file:
 Without an API key, Kochwerk & Jakobs run with status **offline** (unavailable)
 — all other sources are independent of this.
 
-### systemd unit (example)
+### Headless deployment (systemd, for the VM)
 
-```ini
-[Unit]
-Description=lunch.science
-After=network-online.target
+Running `python app.py` in the foreground dies when you close the terminal.
+For the VM, run it as a **systemd service** instead — it starts on boot,
+survives closing the terminal and logouts, and auto-restarts on crash.
 
-[Service]
-WorkingDirectory=/path/to/lunch.science
-ExecStart=/path/to/lunch.science/.venv/bin/python app.py
-Restart=on-failure
-Environment=LUNCH_PORT=8080
+One command (as root / with sudo, from a checkout of this repo):
 
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo bash install-service.sh
 ```
+
+The script creates a dedicated non-root user `lunch`, copies the repo to
+`/opt/lunch.science`, builds the venv, installs the Playwright Chromium
+browser, sets up `~/.lunch_env` (vision-LLM key), and installs + enables +
+starts the service. The site is then up on `http://<vm>:8080`.
+
+Useful commands after install:
+
+```bash
+systemctl status  lunch.science     # is it running?
+journalctl -u lunch.science -f      # live logs
+systemctl restart lunch.science     # after a code change (see below)
+systemctl stop    lunch.science
+```
+
+To pick up code changes, redeploy (idempotent — re-runs the whole setup):
+
+```bash
+git pull && sudo bash install-service.sh
+```
+
+The unit file lives in the repo as `lunch.science.service`; `install-service.sh`
+copies it to `/etc/systemd/system/` and patches `LUNCH_PORT`. Edit that file to
+change the bind host/port, refresh interval, or resource limits.
+
+> Manual / alternative: a **systemd *user* service** also works, but you must
+> enable lingering (`sudo loginctl enable-linger <user>`) so it survives
+> logout. The system service above avoids that step entirely.
 
 ## API
 

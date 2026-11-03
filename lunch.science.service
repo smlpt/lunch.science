@@ -1,0 +1,41 @@
+[Unit]
+Description=lunch.science - Goerlitz menu board (Flask + scrapers)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Dedicated non-root user that owns the code + data + LLM key.
+# Created by install-service.sh.
+User=lunch
+Group=lunch
+# Where the repo is checked out on the VM.
+WorkingDirectory=/opt/lunch.science
+# Use the project venv. The venv is built into the repo dir.
+ExecStart=/opt/lunch.science/.venv/bin/python app.py
+# The Flask app binds 0.0.0.0:8080 by default; override via LUNCH_HOST/LUNCH_PORT
+# if you run it behind a reverse proxy or on a different port.
+Environment=LUNCH_PORT=8080
+Environment=LUNCH_HOST=0.0.0.0
+# Re-scrape every 4h (already the in-app default; kept explicit for clarity).
+Environment=LUNCH_REFRESH_SECONDS=14400
+# Crash resilience.
+Restart=on-failure
+RestartSec=5
+# Reasonable resource guards (a scraper with headless Chromium can spike).
+MemoryMax=1G
+TasksMax=512
+# Don't let a slow scraper block the next cycle.
+TimeoutStopSec=30
+# Hardening (non-root, private tmp, no new privileges).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+# The data dir is inside the repo (writable); allow it explicitly.
+ReadWritePaths=/opt/lunch.science/data
+# Playwright needs a writable home for its browser cache.
+ReadWritePaths=/home/lunch
+
+[Install]
+WantedBy=multi-user.target
