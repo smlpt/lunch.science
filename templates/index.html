@@ -1,39 +1,42 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>lunch.science · Görlitz Speiseplan</title>
+  <title>lunch.science · Görlitz Menu Board</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header class="top">
     <div class="brand">
       <span class="logo">lunch<span class="dot">.</span>science</span>
-      <span class="sub">Görlitz · Speiseplan-Observer</span>
+      <span class="sub">Görlitz · Menu Observer</span>
     </div>
     <div class="meta" id="meta">
       <span class="led" id="led"></span>
-      <span id="meta-text">lade …</span>
+      <span id="meta-text">loading …</span>
     </div>
   </header>
 
   <nav class="tabs" id="tabs">
-    <button class="tab" data-day="overview">Übersicht</button>
-    <button class="tab" data-day="today">Heute</button>
-    <button class="tab" data-day="0">Mo</button>
-    <button class="tab" data-day="1">Di</button>
-    <button class="tab" data-day="2">Mi</button>
-    <button class="tab" data-day="3">Do</button>
-    <button class="tab" data-day="4">Fr</button>
+    <button class="tab" data-day="overview">Overview</button>
+    <button class="tab" data-day="today">Today</button>
+    <button class="tab" data-day="0">Mon</button>
+    <button class="tab" data-day="1">Tue</button>
+    <button class="tab" data-day="2">Wed</button>
+    <button class="tab" data-day="3">Thu</button>
+    <button class="tab" data-day="4">Fri</button>
   </nav>
 
   <main id="content">
-    <div class="empty">Keine Daten. Ein Scrape läuft — gleich neu laden.</div>
+    <div class="empty">No data yet. A scrape is running — refresh in a moment.</div>
   </main>
 
   <footer class="foot">
-    <span id="foot-left">lunch.science — interne Speiseplan-Aggregation</span>
+    <span id="foot-left">lunch.science — internal menu aggregation for Görlitz</span>
     <span id="foot-right"></span>
   </footer>
 

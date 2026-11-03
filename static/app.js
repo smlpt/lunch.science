@@ -4,7 +4,7 @@
 
   var DATA = JSON.parse(document.getElementById("menu-data").textContent || "{}");
   var STATE = JSON.parse(document.getElementById("scrape-state").textContent || "{}");
-  var DAY_LABELS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+  var DAY_LABELS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
   var RESTS = DATA.restaurants || [];
   var content = document.getElementById("content");
   var tabsEl = document.getElementById("tabs");
@@ -38,7 +38,7 @@
   }
 
   function statusWord(s) {
-    return { ok: "OK", stale: "stale", err: "Fehler", unavailable: "offline",
+    return { ok: "OK", stale: "stale", err: "error", unavailable: "offline",
              unavail: "offline" }[s] || s;
   }
 
@@ -72,7 +72,7 @@
     var h = '<div class="dish"><div class="row1"><span class="name">' + esc(it.name) + '</span>';
     var prices = [];
     if (it.price) prices.push('<span>' + esc(it.price) + '</span>');
-    if (it.price_takeaway) prices.push('<span class="out">/ ' + esc(it.price_takeaway) + ' a.H.</span>');
+    if (it.price_takeaway) prices.push('<span class="out">/ ' + esc(it.price_takeaway) + ' takeaway</span>');
     h += '<span class="price">' + (prices.join("") || "&nbsp;") + '</span></div>';
     if (it.description) h += '<div class="desc">' + esc(it.description) + '</div>';
     var tags = [];
@@ -97,8 +97,8 @@
          '<span class="status ' + st + '">' + statusWord(st) + '</span></div>';
     var sub = [];
     if (rest.address) sub.push(esc(rest.address));
-    if (rest.period) sub.push('KW: ' + esc(rest.period));
-    if (rest.url) sub.push('<a href="' + esc(rest.url) + '" target="_blank" rel="noopener">quelle ↗</a>');
+    if (rest.period) sub.push(esc(rest.period));
+    if (rest.url) sub.push('<a href="' + esc(rest.url) + '" target="_blank" rel="noopener">source ↗</a>');
     if (sub.length) h += '<div class="card-sub">' + sub.join(" · ") + '</div>';
     if (rest.status === "unavailable" || st === "unavail") {
       h += '<div class="errmsg">' + esc(rest.error || "nicht verfügbar") + '</div>';
@@ -108,15 +108,15 @@
       if (rest.note) h += '<div class="note">' + esc(rest.note) + '</div>';
       var day = dayFor(rest, dkey);
       if (!items) {
-        h += '<div class="card-sub">kein Eintrag für diesen Tag</div>';
+        h += '<div class="card-sub">no entry for this day</div>';
       } else if (day && day.is_open === false) {
-        h += '<div class="closed">' + esc(day.note || "Geschlossen") + '</div>';
+        h += '<div class="closed">' + esc(day.note || "Closed") + '</div>';
       } else {
         // A day can carry both a note (e.g. location & time for SoulReis) and
         // its dishes - render the note on top of the menu, not instead of it.
         if (day && day.note) h += '<div class="daynote">' + esc(day.note) + '</div>';
         if (!items.length) {
-          h += '<div class="card-sub">keine Gerichte</div>';
+          h += '<div class="card-sub">no dishes</div>';
         } else {
           h += '<div class="dishes">' + items.map(dishHTML).join("") + '</div>';
         }
@@ -127,7 +127,7 @@
         }).map(function (k) {
           return '<span class="li"><b>' + esc(k) + '</b> ' + esc(rest.allergens_legend[k]) + '</span>';
         }).join("");
-        h += '<div class="legend">Allergene: ' + leg + '</div>';
+        h += '<div class="legend">Allergens: ' + leg + '</div>';
       }
     }
     h += '</article>';
@@ -138,7 +138,7 @@
     var dkey = tabDayKey(tab);
     var label = tab === "today"
       ? DAY_LABELS[todayWd] + ", " + fmt(todayKey)
-      : (tab === "overview" ? "Übersicht" : DAY_LABELS[parseInt(tab, 10)]);
+      : (tab === "overview" ? "Overview" : DAY_LABELS[parseInt(tab, 10)]);
     var html = '<div class="dayhead"><h2>' + esc(label) + '</h2>';
     if (dkey) html += '<span class="d">' + fmt(dkey) + '</span>';
     html += '<span class="periods">' + RESTS.map(function (r) {
@@ -155,23 +155,23 @@
     var dkey = tabDayKey(tab) || todayKey;
     var label = DAY_LABELS[parseInt(tab, 10)] + ", " + fmt(dkey);
     var html = '<div class="dayhead"><h2>' + esc(label) + '</h2>' +
-      '<span class="d">Übersicht · ' + fmt(dkey) + '</span></div>';
+      '<span class="d">Overview · ' + fmt(dkey) + '</span></div>';
     html += '<div style="overflow-x:auto"><table class="ov"><thead><tr><th>Restaurant</th>';
-    html += '<th>Gerichte</th></tr></thead><tbody>';
+    html += '<th>Dishes</th></tr></thead><tbody>';
     RESTS.forEach(function (r) {
       var items = itemsForDay(r, dkey);
       var day = dayFor(r, dkey);
       html += '<tr><td class="rest">' + esc(r.name) + '</td><td>';
       if (r.status === "unavailable" || staleStatus(r) === "unavail") {
-        html += '<span class="none">offline — ' + esc(r.error || "keine Daten") + '</span>';
+        html += '<span class="none">offline — ' + esc(r.error || "no data") + '</span>';
       } else if (staleStatus(r) === "err") {
-        html += '<span class="none">Fehler</span>';
+        html += '<span class="none">error</span>';
       } else if (!items) {
-        html += '<span class="none">— kein Eintrag —</span>';
+        html += '<span class="none">— no entry —</span>';
       } else if (day && day.is_open === false) {
-        html += '<span class="none">' + esc(day.note || "Geschlossen") + '</span>';
+        html += '<span class="none">' + esc(day.note || "Closed") + '</span>';
       } else if (!items.length) {
-        html += '<span class="none">keine Gerichte</span>';
+        html += '<span class="none">no dishes</span>';
       } else {
         html += items.map(function (it) {
           return '<div class="item">' + esc(it.name) +
@@ -191,7 +191,7 @@
       return r.allergens_legend && Object.keys(r.allergens_legend).length;
     });
     if (!blocks.length) return "";
-    var h = '<div class="legblock"><h4>ALLERGEN-SCHLÜSSEL</h4>';
+    var h = '<div class="legblock"><h4>ALLERGEN KEY</h4>';
     blocks.forEach(function (r) {
       h += '<div style="margin-top:6px"><b style="color:var(--ink)">' + esc(r.name) + '</b></div><div>';
       h += Object.keys(r.allergens_legend).sort(function (a, b) {
@@ -213,7 +213,7 @@
     });
     // mark "today" tab as active if a weekday tab equals today's weekday
     if (tab !== "today" && tab !== "overview" && parseInt(tab, 10) === todayWd) {
-      // also highlight Heute? keep simple: only the clicked one.
+      // keep simple: only the clicked tab is highlighted.
     }
     if (tab === "overview") renderOverview(tab);
     else renderDay(tab);
@@ -240,15 +240,15 @@
       led.className = "led";
     }
     if (STATE.scraping) {
-      txt.textContent = "scrape läuft …";
+      txt.textContent = "scraping …";
     } else if (DATA.scraped_at) {
       var age = Math.round((Date.now() - new Date(DATA.scraped_at).getTime()) / 60000);
-      txt.textContent = "datenstand " + DATA.scraped_at.replace("T", " ").slice(0, 16) +
-        " (" + (age < 1 ? "<1 min" : age + " min") + " alt)";
-      foot.textContent = "aktualisierung alle " + Math.round((STATE.refresh_seconds || 14400) / 3600) +
+      txt.textContent = "updated " + DATA.scraped_at.replace("T", " ").slice(0, 16) +
+        " (" + (age < 1 ? "<1 min" : age + " min") + " ago)";
+      foot.textContent = "refresh every " + Math.round((STATE.refresh_seconds || 14400) / 3600) +
         " h · " + RESTS.length + " sources";
     } else {
-      txt.textContent = "noch keine daten";
+      txt.textContent = "no data yet";
     }
   }
 
@@ -269,7 +269,7 @@
     }).catch(function () {});
   }
 
-  // initial render: default to "Heute"
+  // initial render: default to "today"
   setTab("today");
   updateMeta();
   setInterval(poll, 20000);
