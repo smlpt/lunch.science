@@ -117,11 +117,19 @@ translation is a post-processing step in `scrape.py` → `scrapers/translate.py`
 for each restaurant it sends the deduplicated dish names, descriptions,
 category names, tags and the allergen-legend words to the model and stores the
 results as `name_en` / `description_en` / `category_en` / `tags_en` /
-`allergens_legend_en` alongside the originals in `data/menus.json`. The UI's
+`allergens_legend_en` alongside the originals in `data/menus.json`. It also
+translates the per-restaurant **constant strings** the UI shows — `period_en`,
+`address_en`, `note_en` — plus each day's `note_en`/`label_en` (e.g. closed-day
+notes like "Geschlossen" → "Closed", and location/time notes). The UI's
 **DE | EN** toggle (top-right of the header) switches which set is shown; the
 choice is remembered in `localStorage`. Allergen codes (A1, A3…) are never
 translated — only the legend words (SOJA → SOYA) — so in EN mode the chips show
 the English allergen name.
+
+The toggle drives the **whole UI**, not just the menus: day tabs, day headers,
+the Overview table, status words, the "updated …/refresh every …" meta line,
+error/empty states, the footer and the page title all have DE/EN strings in
+`static/app.js` (the `I18N` table).
 
 **Graceful degradation:** if there is no API key, the endpoint is down, or a
 restaurant's call fails, that restaurant simply keeps its German text (no

@@ -93,6 +93,16 @@ def _extract_strings(rest: dict) -> tuple[dict[str, str], dict[str, str],
             put("desc", counter, it.get("description"))
             put("cat", counter, it.get("category"))
             counter += 1
+        # Day-level constant strings (closed-day notes like "Geschlossen",
+        # SoulReis location/time notes, and the day label).
+        put("dnote", dk, day.get("note"))
+        put("dlabel", dk, day.get("label"))
+
+    # Restaurant-level constant strings shown in the UI (address, period,
+    # the "note" line). Keyed by name so _apply_translations can read them back.
+    put("const", "period", rest.get("period"))
+    put("const", "address", rest.get("address"))
+    put("const", "note", rest.get("note"))
 
     # Tags are few and shared; give them their own namespace, dedup by value,
     # and keep the value->key map so _apply_translations can look them up by
@@ -141,6 +151,15 @@ def _apply_translations(rest: dict, tr: dict[str, str],
         return _TAG_FALLBACK.get(t, t)
 
     for dk, day in rest.get("days", {}).items():
+        # Day-level note/label (e.g. "Geschlossen", location & time notes).
+        dn = get(f"dnote:{dk}")
+        if dn and dn != (day.get("note") or ""):
+            day["note_en"] = dn
+            changed += 1
+        dl = get(f"dlabel:{dk}")
+        if dl and dl != (day.get("label") or ""):
+            day["label_en"] = dl
+            changed += 1
         for i, it in enumerate(day.get("items", [])):
             g = item_idx.get((dk, i))
             if g is None:
@@ -161,6 +180,13 @@ def _apply_translations(rest: dict, tr: dict[str, str],
             if tags:
                 it["tags_en"] = [tag_en(t) for t in tags]
                 changed += 1
+
+    # Restaurant-level constants (address, period, note).
+    for field in ("period", "address", "note"):
+        e = get(f"const:{field}")
+        if e and e != (rest.get(field) or ""):
+            rest[field + "_en"] = e
+            changed += 1
 
     legend = rest.get("allergens_legend") or {}
     if legend:

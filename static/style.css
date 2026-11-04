@@ -176,6 +176,8 @@ main { padding: 24px 24px 48px; max-width: 1180px; margin: 0 auto; }
 .legend { font-size: 11px; color: var(--ink-dim); margin-top: 12px; padding-top: 10px;
           border-top: 1px solid var(--line); }
 .legend b { color: var(--warn); font-weight: 600; }
+.legend .li { display: inline-block; margin: 2px 0; }
+.legend .li-sep { display: inline-block; margin: 0 8px; color: var(--ink-faint); }
 
 /* overview table */
 .ov { width: 100%; border-collapse: collapse; font-size: 13.5px; }
@@ -195,8 +197,9 @@ main { padding: 24px 24px 48px; max-width: 1180px; margin: 0 auto; }
             border: 1px solid var(--line); border-radius: 8px; background: var(--bg2); }
 .legblock h4 { margin: 0 0 8px; color: var(--ink); font-size: 12px; letter-spacing: 1px;
                font-weight: 700; }
-.legblock .li { display: inline-block; margin: 2px 10px 2px 0; }
+.legblock .li { display: inline-block; margin: 3px 0; }
 .legblock .li b { color: var(--warn); font-weight: 600; }
+.legblock .li-sep { display: inline-block; margin: 0 8px; color: var(--ink-faint); }
 
 .foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;
         padding: 16px 24px; border-top: 1px solid var(--line); color: var(--ink-dim);
