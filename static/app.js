@@ -139,7 +139,7 @@
     if (r.status && r.status !== "ok") return r.status;
     if (!r.last_scraped) return "stale";
     var age = Date.now() - new Date(r.last_scraped).getTime();
-    if (age > 3 * 3600 * 1000) return "stale";
+    if (age > 3.5 * 3600 * 1000) return "stale";
     return "ok";
   }
 
@@ -251,7 +251,7 @@
         }).map(function (k) {
           return '<span class="li"><b>' + esc(k) + '</b> ' + esc(legend[k]) + '</span>';
         }).join('<span class="li-sep">·</span>');
-        h += '<div class="legend">' + esc(t("allergens")) + leg + '</div>';
+        h += '<div class="legend">' + esc(t("allergens")) + ' ' + leg + '</div>';
       }
     }
     h += '</article>';
