@@ -257,3 +257,40 @@ def ask_vision(image_b64: str, *, system: str, user_text: str = "Transcribe this
 
 def image_to_b64(data: bytes) -> str:
     return base64.b64encode(data).decode()
+
+
+def ask_text(system: str, user_text: str, *, max_tokens: int = 4000,
+             timeout: int = 180) -> str:
+    """Plain text->text chat completion on the same LLM endpoint as ask_vision.
+
+    Returns the raw content string (not parsed). Raises RuntimeError if no API
+    key is configured, and the underlying requests/HTTP error otherwise. Used by
+    the post-scrape translation step.
+    """
+    cfg = _llm_config()
+    api_key = cfg["api_key"]
+    if not api_key:
+        raise RuntimeError(
+            "no LLM API key configured. Create a protected config file "
+            f"{ENV_FILE} (chmod 600) containing LUNCH_API_KEY=your-key, or set "
+            "the env var LUNCH_API_KEY / OPENAI_API_KEY.")
+    base_url = cfg["base_url"].rstrip("/")
+    model = cfg["model"]
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "temperature": 0,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_text},
+        ],
+    }
+    log.info("POST %s/chat/completions (text) model=%s", base_url, model)
+    r = requests.post(base_url + "/chat/completions",
+                      headers={"Authorization": f"Bearer {api_key}",
+                               "Content-Type": "application/json"},
+                      json=payload, timeout=timeout)
+    r.raise_for_status()
+    text = r.json()["choices"][0]["message"]["content"].strip()
+    log.info("LLM text response (%d chars):\n%s", len(text), text[:1500])
+    return text

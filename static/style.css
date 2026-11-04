@@ -60,6 +60,37 @@ body { min-height: 100vh; }
 @keyframes pulse { 50% { opacity: .35; } }
 @keyframes blink { 50% { opacity: .25; } }
 
+/* DE/EN language toggle (top-right of the header) */
+.lang {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel);
+  margin-right: 4px;
+}
+.lang-opt {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .5px;
+  padding: 4px 11px;
+  cursor: pointer;
+  line-height: 1;
+  transition: background .12s ease, color .12s ease;
+}
+.lang-opt + .lang-opt { border-left: 1px solid var(--line); }
+.lang-opt:hover { color: var(--ink); }
+.lang-opt.active {
+  background: var(--ink);
+  color: var(--bg);
+}
+
 /* tabs */
 .tabs { display: flex; gap: 6px; flex-wrap: wrap;
         padding: 14px 24px; border-bottom: 1px solid var(--line); }

@@ -21,8 +21,9 @@ on a slim, slightly retro/scientific-looking website (overview + day tabs,
 ## Architecture
 
 ```
-scrape.py        → runs all scrapers, writes data/menus.json (atomically)
-scrapers/        → one module per restaurant + common.py (HTTP, vision LLM, schema)
+scrape.py        → runs all scrapers, translates DE→EN, writes data/menus.json
+scrapers/        → one module per restaurant + common.py (HTTP, LLM, schema)
+                   + translate.py (post-scrape DE→EN translation step)
 config.py        → paths, refresh interval, bind host/port
 app.py           → Flask app, renders the UI, background thread scrapes every 4 h
 templates/ static/ → frontend (vanilla HTML/CSS/JS, no build step)
@@ -36,13 +37,18 @@ Common schema per restaurant:
   "id": "sudost", "name": "SUDOST", "kind": "week",   // week | day | weekly-rotating
   "period": "26.10. – 30.10.2026", "url": "...", "address": "...",
   "allergens_legend": {"1": "Gluten", ...},
+  "allergens_legend_en": {"1": "GLUTEN", ...},          // added by translate.py
   "days": { "2026-11-02": { "label": "Monday", "items": [
         { "name": "...", "description": "...", "price": "12,30 €",
-          "price_takeaway": null, "tags": ["vegetarian"], "allergens": [1,2] } ] } },
+          "price_takeaway": null, "tags": ["vegetarian"], "allergens": [1,2],
+          "name_en": "...", "description_en": "...", "tags_en": ["vegetarian"] } ] } },
   "status": "ok",  // ok | stale | error | unavailable
   "last_scraped": "2026-11-02T11:45:31+01:00", "error": null
 }
 ```
+
+(`*_en` fields are optional — present only when the post-scrape translation ran;
+the UI's DE/EN toggle uses them and falls back to the German original otherwise.)
 
 `kind=weekly-rotating` (Bauchgefühl) has no day concept — the menu is shown
 for every day.
@@ -102,6 +108,26 @@ All accepted keys in the file:
 
 > `chmod 600` = only the user who created the file (the app user on the VM)
 > can read it. Other users get `Permission denied`.
+
+### English menu translation
+
+After every scrape, the German menu text is translated to English by the
+**same LLM endpoint** configured above (no extra key/endpoint needed). The
+translation is a post-processing step in `scrape.py` → `scrapers/translate.py`:
+for each restaurant it sends the deduplicated dish names, descriptions,
+category names, tags and the allergen-legend words to the model and stores the
+results as `name_en` / `description_en` / `category_en` / `tags_en` /
+`allergens_legend_en` alongside the originals in `data/menus.json`. The UI's
+**DE | EN** toggle (top-right of the header) switches which set is shown; the
+choice is remembered in `localStorage`. Allergen codes (A1, A3…) are never
+translated — only the legend words (SOJA → SOYA) — so in EN mode the chips show
+the English allergen name.
+
+**Graceful degradation:** if there is no API key, the endpoint is down, or a
+restaurant's call fails, that restaurant simply keeps its German text (no
+`_en` fields) and EN mode falls back to the German original for it. Translation
+never blocks or empties the menu, and a failure is recorded under the top-level
+`translation` key (`status`, `translated/total`, `at`).
 
 ### Environment variables (app)
 

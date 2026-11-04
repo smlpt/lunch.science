@@ -68,6 +68,15 @@ def scrape(only: list[str] | None = None, *, merge_existing: bool = True) -> dic
         "restaurants": ordered,
     }
 
+    # Translate German -> English in place (graceful no-op if no LLM key).
+    # Runs before the write so the *_en fields land in menus.json. Never fatal:
+    # a crash here keeps the (untranslated) payload and still writes it.
+    try:
+        from scrapers import translate
+        translate.translate_payload(payload)
+    except Exception as e:  # noqa: BLE001 - translation must never block the menu
+        log.warning("translation step failed (writing untranslated): %s", e)
+
     # Atomic write.
     fd, tmp = tempfile.mkstemp(dir=str(config.DATA_DIR), prefix=".menus-", suffix=".json")
     try:

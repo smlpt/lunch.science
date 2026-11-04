@@ -14,6 +14,31 @@
   var todayKey = isoDate(new Date());
   var current = "today";
 
+  // Menu language: "de" (original) or "en" (LLM-translated *_en fields).
+  // Persisted in localStorage so the choice sticks across reloads/polls.
+  var LANG = (function () {
+    try { return localStorage.getItem("lunch.lang") === "en" ? "en" : "de"; }
+    catch (e) { return "de"; }
+  })();
+  function setLang(lang) {
+    LANG = (lang === "en" ? "en" : "de");
+    try { localStorage.setItem("lunch.lang", LANG); } catch (e) {}
+    Array.prototype.forEach.call(
+      document.querySelectorAll("#lang-toggle .lang-opt"),
+      function (b) { b.classList.toggle("active", b.getAttribute("data-lang") === LANG); });
+    if (current) setTab(current);   // re-render with the new language
+  }
+  // Pick the displayed value for a field: EN falls back to the German original
+  // when no *_en translation exists (graceful degradation).
+  function L(it, field) {
+    if (!it) return null;
+    if (LANG === "en") {
+      var en = it[field + "_en"];
+      if (en) return en;
+    }
+    return it[field];
+  }
+
   function isoDate(d) {
     var m = d.getMonth() + 1, day = d.getDate();
     return d.getFullYear() + "-" + pad(m) + "-" + pad(day);
@@ -68,22 +93,36 @@
     return rest.days && rest.days[dkey];
   }
 
-  function dishHTML(it) {
-    var h = '<div class="dish"><div class="row1"><span class="name">' + esc(it.name) + '</span>';
+  // Translate an allergen code via the restaurant legend (EN mode), else "A{n}".
+  function allergenLabel(rest, code) {
+    if (LANG === "en" && rest && rest.allergens_legend_en) {
+      var w = rest.allergens_legend_en[String(code)];
+      if (w) return w;
+    }
+    return "A" + code;
+  }
+
+  function dishHTML(it, rest) {
+    var name = L(it, "name") || it.name;
+    var h = '<div class="dish"><div class="row1"><span class="name">' + esc(name) + '</span>';
     var prices = [];
     if (it.price) prices.push('<span>' + esc(it.price) + '</span>');
     if (it.price_takeaway) prices.push('<span class="out">/ ' + esc(it.price_takeaway) + ' takeaway</span>');
     h += '<span class="price">' + (prices.join("") || "&nbsp;") + '</span></div>';
-    if (it.description) h += '<div class="desc">' + esc(it.description) + '</div>';
+    var desc = L(it, "description");
+    if (desc) h += '<div class="desc">' + esc(desc) + '</div>';
     var tags = [];
-    (it.tags || []).forEach(function (t) {
-      var cls = (t === "vegetarisch" || t === "vegan") ? "veg" : "";
-      tags.push('<span class="tag ' + cls + '">' + esc(t) + '</span>');
+    // Show EN tags when available, else the German originals.
+    var tagList = (LANG === "en" && it.tags_en) ? it.tags_en : (it.tags || []);
+    tagList.forEach(function (t) {
+      var key = (t === "vegetarisch" || t === "vegetarian" || t === "vegan") ? "veg" : "";
+      tags.push('<span class="tag ' + key + '">' + esc(t) + '</span>');
     });
     (it.allergens || []).forEach(function (a) {
-      tags.push('<span class="tag allergen">A' + esc(a) + '</span>');
+      tags.push('<span class="tag allergen">' + esc(allergenLabel(rest, a)) + '</span>');
     });
-    if (it.category) tags.push('<span class="tag">' + esc(it.category) + '</span>');
+    var cat = L(it, "category");
+    if (cat) tags.push('<span class="tag">' + esc(cat) + '</span>');
     if (tags.length) h += '<div class="tags">' + tags.join("") + '</div>';
     h += '</div>';
     return h;
@@ -118,14 +157,18 @@
         if (!items.length) {
           h += '<div class="card-sub">no dishes</div>';
         } else {
-          h += '<div class="dishes">' + items.map(dishHTML).join("") + '</div>';
+          h += '<div class="dishes">' + items.map(function (it) {
+            return dishHTML(it, rest);
+          }).join("") + '</div>';
         }
       }
-      if (rest.allergens_legend && Object.keys(rest.allergens_legend).length) {
-        var leg = Object.keys(rest.allergens_legend).sort(function (a, b) {
+      var legend = (LANG === "en" && rest.allergens_legend_en)
+        ? rest.allergens_legend_en : rest.allergens_legend;
+      if (legend && Object.keys(legend).length) {
+        var leg = Object.keys(legend).sort(function (a, b) {
           return parseInt(a) - parseInt(b);
         }).map(function (k) {
-          return '<span class="li"><b>' + esc(k) + '</b> ' + esc(rest.allergens_legend[k]) + '</span>';
+          return '<span class="li"><b>' + esc(k) + '</b> ' + esc(legend[k]) + '</span>';
         }).join("");
         h += '<div class="legend">Allergens: ' + leg + '</div>';
       }
@@ -173,7 +216,7 @@
         html += '<span class="none">no dishes</span>';
       } else {
         html += items.map(function (it) {
-          return '<div class="item">' + esc(it.name) +
+          return '<div class="item">' + esc(L(it, "name") || it.name) +
             (it.price ? ' <span class="p">(' + esc(it.price) + (it.price_takeaway ? ' / ' + esc(it.price_takeaway) : '') + ')</span>' : '') +
             '</div>';
         }).join("");
@@ -187,16 +230,18 @@
 
   function legendBlock() {
     var blocks = RESTS.filter(function (r) {
-      return r.allergens_legend && Object.keys(r.allergens_legend).length;
+      var legend = (LANG === "en" && r.allergens_legend_en) ? r.allergens_legend_en : r.allergens_legend;
+      return legend && Object.keys(legend).length;
     });
     if (!blocks.length) return "";
-    var h = '<div class="legblock"><h4>ALLERGEN KEY</h4>';
+    var h = '<div class="legblock"><h4>' + (LANG === "en" ? "ALLERGEN KEY" : "ALLERGEN-LEGENDE") + '</h4>';
     blocks.forEach(function (r) {
+      var legend = (LANG === "en" && r.allergens_legend_en) ? r.allergens_legend_en : r.allergens_legend;
       h += '<div style="margin-top:6px"><b style="color:var(--ink)">' + esc(r.name) + '</b></div><div>';
-      h += Object.keys(r.allergens_legend).sort(function (a, b) {
+      h += Object.keys(legend).sort(function (a, b) {
         return parseInt(a) - parseInt(b);
       }).map(function (k) {
-        return '<span class="li"><b>' + esc(k) + '</b> ' + esc(r.allergens_legend[k]) + '</span>';
+        return '<span class="li"><b>' + esc(k) + '</b> ' + esc(legend[k]) + '</span>';
       }).join("");
       h += '</div>';
     });
@@ -222,6 +267,15 @@
     var b = e.target.closest(".tab");
     if (b) setTab(b.getAttribute("data-day"));
   });
+
+  // DE/EN language toggle.
+  var langToggle = document.getElementById("lang-toggle");
+  if (langToggle) {
+    langToggle.addEventListener("click", function (e) {
+      var b = e.target.closest(".lang-opt");
+      if (b) setLang(b.getAttribute("data-lang"));
+    });
+  }
 
   function updateMeta() {
     var led = document.getElementById("led");
@@ -268,7 +322,10 @@
     }).catch(function () {});
   }
 
-  // initial render: default to "today"
+  // initial render: default to "today", reflect the persisted language.
+  Array.prototype.forEach.call(
+    document.querySelectorAll("#lang-toggle .lang-opt"),
+    function (b) { b.classList.toggle("active", b.getAttribute("data-lang") === LANG); });
   setTab("today");
   updateMeta();
   setInterval(poll, 20000);
