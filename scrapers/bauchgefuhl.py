@@ -16,9 +16,18 @@ We only surface the items the user is interested in:
   * the currently available Wochenbowl.
 
 Items the restaurant has greyed out as "Nicht verfügbar" are dropped, as are
-the Desserts and Alkoholfreie Getränke categories. "Available" is read from
-the rendered page (the item-price element literally says "Nicht verfügbar"
-for greyed-out dishes); the JSON has no equivalent flag.
+the Desserts and Alkoholfreie Getränke categories.
+
+Crucially, "available" exists ONLY in the rendered DOM: we verified the
+__NEXT_DATA__ JSON carries no availability signal (the available and
+unavailable item objects are byte-identical, and the category 'preview' lists
+every item). The greyed-out dish's price element literally says
+"Nicht verfügbar" in the DOM. But the rows lazy-load and Cloudflare's
+anti-bot makes a single snapshot's row count non-deterministic, so we render
+up to a few times and keep the first *complete* snapshot (rendered row count
+reaches the JSON's expected total). If it never completes we raise, so the
+caller keeps the previous good data rather than writing a partial render that
+would silently re-surface out-of-stock bowls.
 """
 from __future__ import annotations
 
@@ -65,71 +74,127 @@ def _price_str(base_price) -> str | None:
     return f"{s} €"
 
 
-def _fetch_page() -> tuple[dict, str]:
-    """Fetch the page once; return (__NEXT_DATA__ dict, rendered HTML).
+# Max times to render the page before giving up. The menu rows lazy-load and
+# Cloudflare's anti-bot makes how many rows end up in a single DOM snapshot
+# genuinely non-deterministic, so we retry until a *complete* render appears.
+_MAX_RETRIES = 3
+# Scroll passes + amount to force lazy-loaded rows into the DOM.
+_SCROLLS = 12
+_SCROLL_PX = 3000
 
-    The rendered HTML is needed to read the per-dish 'Nicht verfügbar' flag,
-    which is not present in the JSON. Categories are expanded in the DOM first
-    so every dish row (and its price element) is present.
+
+def _render_once(p) -> tuple[dict, str]:
+    """Load the page once in a fresh browser; return (__NEXT_DATA__, html).
+
+    Does the full expand + scroll dance to pull lazy-loaded rows into the DOM.
+    The caller decides whether the snapshot is complete enough to use.
     """
-    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+    browser = p.chromium.launch(
+        headless=True,
+        args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+    )
+    try:
+        page = browser.new_page(
+            user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"))
+        page.goto(URL, wait_until="domcontentloaded", timeout=90000)
+        # Wait until the menu JSON is in the DOM (this is present immediately
+        # once the Cloudflare challenge clears - it is NOT a signal that the
+        # dish rows have rendered, so we must not gate on it for availability).
+        page.wait_for_function(
+            "() => (document.body || {}).innerHTML"
+            " && document.body.innerHTML.indexOf('__NEXT_DATA__') >= 0",
+            timeout=60000,
         )
+        page.wait_for_timeout(3000)  # let hydration begin
+        # Expand collapsed categories so every dish row renders.
         try:
-            page = browser.new_page(
-                user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"))
-            page.goto(URL, wait_until="domcontentloaded", timeout=90000)
-            # Wait (bounded) until the menu has actually hydrated AND the
-            # "Nicht verfügbar" price text is in the DOM. The availability
-            # filter depends on that text, so we must not snapshot the page
-            # before it exists - a fixed wait is timing- and environment-
-            # sensitive (it flaps between a dev box and a fresh headless VM).
-            # Polling on the real condition makes the scrape deterministic.
-            try:
-                page.wait_for_function(
-                    """() => {
-                        const html = document.body ? document.body.innerHTML : '';
-                        return html.indexOf('__NEXT_DATA__') >= 0
-                            && /Nicht\\s+verf[üu]gbar/i.test(html);
-                    }""",
-                    timeout=60000,
-                )
-            except PlaywrightTimeoutError:
-                # Timed out: either there are genuinely no unavailable items
-                # this week, or hydration stalled. Either way, proceed to
-                # snapshot - a missing __NEXT_DATA__ below will raise if the
-                # page never loaded at all.
-                pass
-            # Expand collapsed categories so every dish row (and its price
-            # element) renders, then scroll to force any remaining lazy-loaded
-            # rows into the DOM. Best-effort: if expansion fails we still have
-            # whatever rendered, which is enough for the available items.
-            try:
-                page.evaluate(
-                    "() => document.querySelectorAll('[data-qa]').forEach(el => {"
-                    "  const qa = el.getAttribute('data-qa') || '';"
-                    "  if (/category|section|toggle/i.test(qa)) { try { el.click(); } catch(e) {} }"
-                    "})")
-                page.wait_for_timeout(1500)
-            except Exception:  # noqa: BLE001 - expansion is best-effort
-                pass
-            for _ in range(8):
-                page.mouse.wheel(0, 2000)
-                page.wait_for_timeout(400)
-            page.wait_for_timeout(1500)
-            html = page.content()
-        finally:
-            browser.close()
+            page.evaluate(
+                "() => document.querySelectorAll('[data-qa]').forEach(el => {"
+                "  const qa = el.getAttribute('data-qa') || '';"
+                "  if (/category|section|toggle/i.test(qa)) { try { el.click(); } catch(e) {} }"
+                "})")
+            page.wait_for_timeout(1000)
+        except Exception:  # noqa: BLE001 - expansion is best-effort
+            pass
+        # Scroll to force any remaining lazy-loaded rows into the DOM.
+        for _ in range(_SCROLLS):
+            page.mouse.wheel(0, _SCROLL_PX)
+            page.wait_for_timeout(300)
+        page.wait_for_timeout(1000)
+        html = page.content()
+    finally:
+        browser.close()
     m = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
                   html, re.S)
     if not m:
         raise RuntimeError("__NEXT_DATA__ not found (Cloudflare challenge may not have cleared)")
     return json.loads(m.group(1)), html
+
+
+def _rendered_rows(html: str) -> int:
+    """How many dish rows (price elements) are present in the DOM snapshot."""
+    return html.count('data-qa="item-price"')
+
+
+def _expected_rows(nd: dict) -> int:
+    """Total dish rows the JSON says the menu has (sum of category itemIds).
+
+    This is the target a *complete* DOM render must reach; fewer rows means
+    some lazy-loaded dishes (possibly the unavailable ones) never rendered.
+    """
+    try:
+        menu = nd["props"]["appProps"]["preloadedState"]["menu"]["restaurant"]
+        categories = menu["cdn"]["restaurant"]["menus"][0].get("categories", [])
+    except (KeyError, TypeError, IndexError):
+        return 0
+    return sum(len(c.get("itemIds", [])) for c in categories)
+
+
+def _fetch_page() -> tuple[dict, str]:
+    """Fetch a *complete* render of the page; return (__NEXT_DATA__, html).
+
+    The per-dish 'Nicht verfügbar' flag only exists in the rendered DOM (the
+    __NEXT_DATA__ JSON carries no availability signal at all - we verified the
+    available and unavailable item objects are byte-identical). But the rows
+    lazy-load and Cloudflare's anti-bot makes a single snapshot's row count
+    non-deterministic. So we render up to _MAX_RETRIES times and keep the
+    first snapshot whose rendered row count reaches the JSON's expected total.
+
+    If no render is complete we RAISE rather than return a partial snapshot:
+    a partial DOM would silently under-detect unavailable dishes and re-surface
+    bowls the restaurant marked out of stock. Raising lets the caller keep the
+    previous good data (scrape.merge_existing) instead of writing a degraded
+    one.
+    """
+    from playwright.sync_api import sync_playwright
+    best: tuple[dict, str] | None = None
+    best_rows = -1
+    with sync_playwright() as p:
+        for _ in range(_MAX_RETRIES):
+            try:
+                nd, html = _render_once(p)
+            except Exception:
+                # e.g. __NEXT_DATA__ missing (challenge didn't clear) - retry.
+                continue
+            rows = _rendered_rows(html)
+            expected = _expected_rows(nd)
+            if rows > best_rows:
+                best, best_rows = (nd, html), rows
+            if expected and rows >= expected:
+                return nd, html
+    if best is None:
+        raise RuntimeError("bauchgefuhl: page never rendered __NEXT_DATA__")
+    if best_rows < _expected_rows(best[0]):
+        raise RuntimeError(
+            f"bauchgefuhl: menu never fully rendered "
+            f"({best_rows}/{_expected_rows(best[0])} rows after "
+            f"{_MAX_RETRIES} tries) - keeping previous data rather than "
+            f"risking stale/unfiltered bowls")
+    # Fallback: use the most complete snapshot we got. The filter may be
+    # incomplete, but at least the page did load; better than nothing and the
+    # common (complete) case is already handled above.
+    return best
 
 
 def scrape() -> dict:
