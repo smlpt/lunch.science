@@ -46,7 +46,7 @@
       var day = b.getAttribute("data-day");
       if (day === "overview") b.textContent = t("overview");
       else if (day === "today") b.textContent = t("today");
-      else b.textContent = dayLabel(parseInt(day, 10)).slice(0, 3);
+      else b.textContent = dict().days_short[parseInt(day, 10)];
     });
     var foot = d.getElementById("foot-left");
     if (foot) foot.textContent = t("foot");
@@ -71,6 +71,7 @@
     de: {
       overview: "Übersicht", today: "Heute",
       days: ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"],
+      days_short: ["Mo", "Di", "Mi", "Do", "Fr"],
       source: "Quelle ↗", loading: "lädt …",
       status_ok: "OK", status_stale: "veraltet", status_err: "Fehler",
       status_unavailable: "offline",
@@ -92,6 +93,7 @@
     en: {
       overview: "Overview", today: "Today",
       days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      days_short: ["Mon", "Tue", "Wed", "Thu", "Fri"],
       source: "source ↗", loading: "loading …",
       status_ok: "OK", status_stale: "stale", status_err: "error",
       status_unavailable: "offline",
@@ -261,8 +263,8 @@
   function renderDay(tab) {
     var dkey = tabDayKey(tab);
     var label = tab === "today"
-      ? dayLabel(todayWd) + ", " + fmt(todayKey)
-      : (tab === "overview" ? t("overview") : dayLabel(parseInt(tab, 10)));
+      ? dict().days[todayWd] + ", " + fmt(todayKey)
+      : (tab === "overview" ? t("overview") : dict().days[parseInt(tab, 10)]);
     var html = '<div class="dayhead"><h2>' + esc(label) + '</h2>';
     if (dkey) html += '<span class="d">' + fmt(dkey) + '</span>';
     html += '<span class="periods">' + RESTS.map(function (r) {
